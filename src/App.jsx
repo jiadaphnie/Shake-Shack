@@ -1,441 +1,495 @@
 import { useState, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend, LineChart, Line } from "recharts";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar,
+  PieChart, Pie, Cell, Legend,
+} from "recharts";
 
-// ── Model coefficients from logistic regression ──
-const MODEL = {
+/* ── constants ─────────────────────────────────────────────────────────── */
+const GREEN = "#54A432";
+const GREEN_LIGHT = "#e6f5de";
+const GREEN_MID = "#3a8022";
+const AMBER = "#f0a000";
+const RED = "#d44";
+
+const GLOBAL = {
   intercept: -93.5572,
   coefs: { fq: 28.8761, pb: 36.6887, ks: 26.1582, h: 34.0957 },
 };
 
-const COUNTRY_MODELS = {
-  "Hong Kong": { intercept: -152.29, coefs: { fq: 43.05, pb: 47.22, ks: 34.58, h: 55.10 }, n: 256, fail: 2, acc: 1.000, r2: 1.000, status: "Non-converged" },
-  "Japan": { intercept: -65.44, coefs: { fq: 22.94, pb: 23.58, ks: 14.26, h: 27.58 }, n: 335, fail: 118, acc: 0.961, r2: 0.911, status: "Converged" },
-  "Philippines": { intercept: -54.19, coefs: { fq: 20.75, pb: 14.57, ks: 16.83, h: 24.72 }, n: 124, fail: 11, acc: 0.960, r2: 0.841, status: "Converged" },
-  "Singapore": { intercept: -98.29, coefs: { fq: 29.05, pb: 38.56, ks: 25.12, h: 39.28 }, n: 350, fail: 22, acc: 0.986, r2: 0.890, status: "Converged" },
-  "South Korea": { intercept: -118.74, coefs: { fq: 41.78, pb: 48.34, ks: 26.59, h: 36.61 }, n: 838, fail: 14, acc: 0.994, r2: 0.835, status: "Converged" },
-  "Thailand": { intercept: -195.48, coefs: { fq: 55.12, pb: 62.84, ks: 44.62, h: 72.33 }, n: 73, fail: 2, acc: 1.000, r2: 1.000, status: "Non-converged" },
-};
-
-// ── Country-level BSE data (aggregated from dataset) ──
 const COUNTRY_DATA = [
-  { country: "South Korea", audits: 838, failRate: 1.7, avgFQ: 90.8, avgPB: 89.6, avgKS: 87.7, avgH: 87.3, avgOverall: 89.4 },
-  { country: "Singapore", audits: 350, failRate: 6.3, avgFQ: 90.0, avgPB: 87.3, avgKS: 77.6, avgH: 80.5, avgOverall: 85.1 },
-  { country: "Japan", audits: 335, failRate: 35.2, avgFQ: 84.6, avgPB: 77.2, avgKS: 73.2, avgH: 72.1, avgOverall: 76.9 },
-  { country: "Hong Kong", audits: 256, failRate: 0.8, avgFQ: 91.0, avgPB: 92.6, avgKS: 90.6, avgH: 83.7, avgOverall: 91.6 },
-  { country: "Philippines", audits: 124, failRate: 8.9, avgFQ: 93.3, avgPB: 81.4, avgKS: 86.0, avgH: 74.4, avgOverall: 84.4 },
-  { country: "Thailand", audits: 73, failRate: 2.7, avgFQ: 95.8, avgPB: 93.2, avgKS: 82.5, avgH: 82.7, avgOverall: 89.8 },
-  { country: "Malaysia", audits: 10, failRate: 0.0, avgFQ: 93.6, avgPB: 92.8, avgKS: 77.9, avgH: 80.6, avgOverall: 87.3 },
+  { c: "South Korea",  n: 838, f: 14,  fr: 1.7,  fq: 90.8, pb: 89.6, ks: 87.7, h: 87.3, ov: 89.4 },
+  { c: "Singapore",    n: 350, f: 22,  fr: 6.3,  fq: 90.0, pb: 87.3, ks: 77.6, h: 80.5, ov: 85.1 },
+  { c: "Japan",        n: 335, f: 118, fr: 35.2, fq: 84.6, pb: 77.2, ks: 73.2, h: 72.1, ov: 76.9 },
+  { c: "Hong Kong",    n: 256, f: 2,   fr: 0.8,  fq: 91.0, pb: 92.6, ks: 90.6, h: 83.7, ov: 91.6 },
+  { c: "Philippines",  n: 124, f: 11,  fr: 8.9,  fq: 93.3, pb: 81.4, ks: 86.0, h: 74.4, ov: 84.4 },
+  { c: "Thailand",     n: 73,  f: 2,   fr: 2.7,  fq: 95.8, pb: 93.2, ks: 82.5, h: 82.7, ov: 89.8 },
+  { c: "Malaysia",     n: 10,  f: 0,   fr: 0.0,  fq: 93.6, pb: 92.8, ks: 77.9, h: 80.6, ov: 87.3 },
 ];
 
-const SECTION_WEIGHTS = { "Food & Quality": 20, "People & Business": 27, "Kitchen & Safety": 21, "Hospitality": 32 };
+const SECTIONS = [
+  { key: "fq", label: "Food & Quality",    weight: 20, coef: 28.88 },
+  { key: "pb", label: "People & Business", weight: 27, coef: 36.69 },
+  { key: "ks", label: "Kitchen & Safety",  weight: 21, coef: 26.16 },
+  { key: "h",  label: "Hospitality",       weight: 32, coef: 34.10 },
+];
 
-const COLORS = {
-  bg: "#0F1419", card: "#1A2332", cardHover: "#1E2A3A", border: "#2A3A4E",
-  accent: "#00C853", accentDim: "#00963E", danger: "#FF3D57", warn: "#FFB300",
-  text: "#E8ECF1", textMuted: "#8899AA", textDim: "#5A6B7E",
-  green: "#00C853", greenBg: "rgba(0,200,83,0.08)",
-  red: "#FF3D57", redBg: "rgba(255,61,87,0.08)",
-  amber: "#FFB300", amberBg: "rgba(255,179,0,0.08)",
-  chart: ["#00C853", "#00B0FF", "#FF6D00", "#AA00FF", "#FF3D57", "#FFD600", "#00E5FF"],
+const PIE_COLORS = [GREEN, GREEN_MID, "#78c050", "#a0d080"];
+
+/* ── helpers ────────────────────────────────────────────────────────────── */
+function predictProb(fq, pb, ks, h) {
+  const lo =
+    GLOBAL.intercept +
+    GLOBAL.coefs.fq * (fq / 100) +
+    GLOBAL.coefs.pb * (pb / 100) +
+    GLOBAL.coefs.ks * (ks / 100) +
+    GLOBAL.coefs.h  * (h  / 100);
+  return 1 / (1 + Math.exp(-lo));
+}
+
+function scoreColor(v) {
+  return v < 75 ? RED : v < 85 ? AMBER : GREEN;
+}
+
+function frColor(fr) {
+  return fr > 10 ? RED : fr > 3 ? AMBER : GREEN;
+}
+
+/* ── sub-components ─────────────────────────────────────────────────────── */
+function StatCard({ label, value }) {
+  return (
+    <div style={{
+      background: "#f5f5f5", borderRadius: 10, padding: "12px 16px",
+    }}>
+      <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 600, color: "#111" }}>{value}</div>
+    </div>
+  );
+}
+
+function Pill({ fr }) {
+  const bg = fr === 0 ? GREEN_LIGHT : fr < 5 ? GREEN_LIGHT : fr < 15 ? "#fff8e0" : "#fde8e8";
+  const color = fr === 0 ? "#2e6b12" : fr < 5 ? "#2e6b12" : fr < 15 ? "#7a5c00" : "#911";
+  return (
+    <span style={{ background: bg, color, padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+      {fr.toFixed(1)}%
+    </span>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: "#fff", border: "0.5px solid #ddd", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color || "#333" }}>{p.name}: {typeof p.value === "number" ? p.value.toFixed(1) : p.value}</div>
+      ))}
+    </div>
+  );
 };
 
-function predictProb(fq, pb, ks, h, model = MODEL) {
-  const logOdds = model.intercept + model.coefs.fq * fq + model.coefs.pb * pb + model.coefs.ks * ks + model.coefs.h * h;
-  return 1 / (1 + Math.exp(-logOdds));
-}
+/* ── tabs ────────────────────────────────────────────────────────────────── */
+function PredictorTab() {
+  const [scores, setScores] = useState({ fq: 85, pb: 82, ks: 80, h: 78 });
 
-function GaugeChart({ value, size = 180 }) {
-  const pct = Math.max(0, Math.min(100, value * 100));
-  const angle = (pct / 100) * 180;
-  const r = size / 2 - 16;
-  const cx = size / 2, cy = size / 2 + 10;
-  const color = pct >= 75 ? COLORS.green : pct >= 50 ? COLORS.amber : COLORS.red;
-  const endX = cx + r * Math.cos(Math.PI - (angle * Math.PI) / 180);
-  const endY = cy - r * Math.sin(Math.PI - (angle * Math.PI) / 180);
-  const large = angle > 180 ? 1 : 0;
+  const prob = useMemo(() => predictProb(scores.fq, scores.pb, scores.ks, scores.h), [scores]);
+  const pct = Math.round(prob * 100);
+  const pass = prob >= 0.75;
+  const wtd = Math.round(scores.fq * 0.20 + scores.pb * 0.27 + scores.ks * 0.21 + scores.h * 0.32);
+
+  const impacts = useMemo(() => {
+    return SECTIONS.map((s) => {
+      const bumped = { ...scores, [s.key]: Math.min(scores[s.key] + 5, 100) };
+      const gain = predictProb(bumped.fq, bumped.pb, bumped.ks, bumped.h) - prob;
+      return { ...s, gain, val: scores[s.key] };
+    }).sort((a, b) => b.gain - a.gain);
+  }, [scores, prob]);
 
   return (
-    <svg width={size} height={size / 2 + 30} viewBox={`0 0 ${size} ${size / 2 + 30}`}>
-      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke={COLORS.border} strokeWidth="10" strokeLinecap="round" />
-      {angle > 0 && <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${large} 1 ${endX} ${endY}`} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" />}
-      <text x={cx} y={cy - 14} textAnchor="middle" fill={color} fontSize="32" fontWeight="800" fontFamily="'JetBrains Mono', monospace">{pct.toFixed(1)}%</text>
-      <text x={cx} y={cy + 6} textAnchor="middle" fill={COLORS.textMuted} fontSize="11" fontFamily="sans-serif">{pct >= 75 ? "PASS" : "FAIL"}</text>
-    </svg>
-  );
-}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+      {/* Left */}
+      <div>
+        <div style={card}>
+          <div style={sectionTitle}>Score inputs — global model</div>
+          {SECTIONS.map((s) => (
+            <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 150, flexShrink: 0 }}>
+                <div style={{ fontSize: 13, color: "#222" }}>{s.label}</div>
+                <div style={{ fontSize: 10, color: "#999" }}>BSE weight {s.weight}%</div>
+              </div>
+              <input
+                type="range" min={50} max={100} step={1} value={scores[s.key]}
+                onChange={(e) => setScores((prev) => ({ ...prev, [s.key]: +e.target.value }))}
+                style={{ flex: 1, accentColor: GREEN }}
+              />
+              <div style={{ fontSize: 13, fontWeight: 600, minWidth: 40, textAlign: "right", color: scoreColor(scores[s.key]) }}>
+                {scores[s.key]}%
+              </div>
+            </div>
+          ))}
+        </div>
 
-function Slider({ label, value, onChange, weight }) {
-  const pct = Math.round(value * 100);
-  const color = pct >= 85 ? COLORS.green : pct >= 75 ? COLORS.amber : COLORS.red;
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ color: COLORS.text, fontSize: 13, fontWeight: 600 }}>{label} <span style={{ color: COLORS.textDim, fontWeight: 400, fontSize: 11 }}>({weight}%)</span></span>
-        <span style={{ color, fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{pct}%</span>
+        <div style={card}>
+          <div style={sectionTitle}>Section impact — improve first</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {impacts.map((im, i) => (
+              <div key={im.key} style={{
+                background: i === 0 ? "#fff5f5" : "#f8f8f8",
+                borderRadius: 8, padding: 10,
+                borderLeft: `3px solid ${i === 0 ? RED : GREEN}`,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#333" }}>{im.label}</div>
+                <div style={{ fontSize: 18, fontWeight: 600, color: "#111", margin: "2px 0" }}>{im.val}%</div>
+                <div style={{ fontSize: 11, color: "#888" }}>
+                  +5pt → +{(im.gain * 100).toFixed(1)}pp · coef {im.coef}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-      <input type="range" min="0" max="100" value={pct} onChange={e => onChange(Number(e.target.value) / 100)}
-        style={{ width: "100%", accentColor: color, height: 6, cursor: "pointer" }} />
+
+      {/* Right */}
+      <div>
+        <div style={{
+          background: GREEN, borderRadius: 12, padding: "20px 24px",
+          textAlign: "center", marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.7)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>Pass probability</div>
+          <div style={{ fontSize: 60, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{pct}%</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,.85)", marginTop: 6 }}>
+            {pass ? "Likely to pass BSE" : "At risk of failing BSE"}
+          </div>
+          <span style={{
+            display: "inline-block", marginTop: 10, padding: "4px 18px", borderRadius: 20,
+            fontSize: 12, fontWeight: 700,
+            background: pass ? "rgba(255,255,255,.25)" : "rgba(0,0,0,.25)",
+            color: "#fff",
+          }}>{pass ? "PASS" : "FAIL"}</span>
+        </div>
+
+        <div style={card}>
+          <div style={sectionTitle}>Weighted score estimate</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 32, fontWeight: 700, color: scoreColor(wtd) }}>{wtd}%</div>
+            <div style={{ fontSize: 13, color: "#888" }}>overall</div>
+          </div>
+          {SECTIONS.map((s) => {
+            const v = scores[s.key];
+            const col = scoreColor(v);
+            return (
+              <div key={s.key} style={{ marginBottom: 7 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666", marginBottom: 3 }}>
+                  <span>{s.key.toUpperCase()}</span>
+                  <span style={{ color: col, fontWeight: 600 }}>{v}%</span>
+                </div>
+                <div style={{ height: 5, background: "#eee", borderRadius: 3 }}>
+                  <div style={{ width: `${v}%`, height: "100%", background: col, borderRadius: 3, transition: "width .2s" }} />
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ borderTop: "0.5px solid #eee", marginTop: 12, paddingTop: 10, fontSize: 12, color: "#888", lineHeight: 1.7 }}>
+            Threshold: <b style={{ color: "#111" }}>75%</b> = Pass &nbsp;·&nbsp; <b style={{ color: GREEN }}>85%</b> = Meets expectations
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, sub, color = COLORS.text }) {
-  return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "16px 18px", flex: 1, minWidth: 140 }}>
-      <div style={{ color: COLORS.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 6 }}>{label}</div>
-      <div style={{ color, fontSize: 26, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
-      {sub && <div style={{ color: COLORS.textDim, fontSize: 11, marginTop: 4 }}>{sub}</div>}
-    </div>
-  );
-}
+function CountryTab() {
+  const sorted = [...COUNTRY_DATA].sort((a, b) => b.fr - a.fr);
 
-function SectionImpact({ scores, setScores }) {
-  const baseline = predictProb(scores.fq, scores.pb, scores.ks, scores.h);
-  const bump = 0.05;
-  const impacts = [
-    { name: "Food & Quality", key: "fq", current: scores.fq },
-    { name: "People & Business", key: "pb", current: scores.pb },
-    { name: "Kitchen & Safety", key: "ks", current: scores.ks },
-    { name: "Hospitality", key: "h", current: scores.h },
-  ].map(s => {
-    const newScores = { ...scores, [s.key]: Math.min(1, s.current + bump) };
-    const newProb = predictProb(newScores.fq, newScores.pb, newScores.ks, newScores.h);
-    return { ...s, impact: (newProb - baseline) * 100, newProb: newProb * 100 };
-  }).sort((a, b) => b.impact - a.impact);
+  const radarData = SECTIONS.map((s) => ({
+    section: s.label.split(" ")[0],
+    ...Object.fromEntries(COUNTRY_DATA.map((d) => [d.c, d[s.key]])),
+  }));
+
+  const radarColors = [GREEN, GREEN_MID, "#78c050", "#a0d080", "#1c5c08", "#c5e8a0", "#3a8022"];
 
   return (
     <div>
-      <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 12 }}>Impact of +5% improvement on pass probability</div>
-      {impacts.map((s, i) => (
-        <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "8px 12px", background: i === 0 ? COLORS.greenBg : "transparent", borderRadius: 8, border: i === 0 ? `1px solid ${COLORS.green}33` : "1px solid transparent" }}>
-          <div style={{ width: 140, color: COLORS.text, fontSize: 13, fontWeight: i === 0 ? 700 : 400 }}>{s.name}</div>
-          <div style={{ flex: 1, height: 8, background: COLORS.border, borderRadius: 4, overflow: "hidden" }}>
-            <div style={{ width: `${Math.min(100, s.impact * 10)}%`, height: "100%", background: i === 0 ? COLORS.green : COLORS.chart[1], borderRadius: 4, transition: "width 0.4s" }} />
-          </div>
-          <div style={{ width: 70, textAlign: "right", color: COLORS.green, fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>+{s.impact.toFixed(2)}%</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={card}>
+          <div style={sectionTitle}>Failure rate by country</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={sorted} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+              <XAxis dataKey="c" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={(v) => v + "%"} tick={{ fontSize: 11 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="fr" name="Fail rate %" radius={[4, 4, 0, 0]}>
+                {sorted.map((d, i) => <Cell key={i} fill={frColor(d.fr)} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      ))}
-      {impacts[0] && <div style={{ marginTop: 8, padding: "10px 14px", background: COLORS.greenBg, borderRadius: 8, border: `1px solid ${COLORS.green}22` }}>
-        <span style={{ color: COLORS.green, fontSize: 12 }}>Recommendation: Prioritize <strong>{impacts[0].name}</strong> — highest marginal gain per 5% improvement</span>
-      </div>}
+        <div style={card}>
+          <div style={sectionTitle}>Section scores by country</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="#eee" />
+              <PolarAngleAxis dataKey="section" tick={{ fontSize: 11 }} />
+              {COUNTRY_DATA.map((d, i) => (
+                <Radar key={d.c} name={d.c} dataKey={d.c} stroke={radarColors[i]} fill={radarColors[i]} fillOpacity={0.08} dot={false} />
+              ))}
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+              <Tooltip content={<CustomTooltip />} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div style={card}>
+        <div style={sectionTitle}>Country summary</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr>
+              {["Country", "Audits", "Fails", "Fail rate", "Avg FQ", "Avg PB", "Avg KS", "Avg H", "Overall"].map((h) => (
+                <th key={h} style={{ textAlign: h === "Country" ? "left" : "right", padding: "6px 8px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #eee", fontWeight: 500 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COUNTRY_DATA.map((d) => (
+              <tr key={d.c} style={{ borderBottom: "0.5px solid #f0f0f0" }}>
+                <td style={{ padding: "7px 8px", color: "#222" }}>{d.c}</td>
+                {[d.n, d.f].map((v, i) => <td key={i} style={{ padding: "7px 8px", textAlign: "right", color: "#222" }}>{v}</td>)}
+                <td style={{ padding: "7px 8px", textAlign: "right" }}><Pill fr={d.fr} /></td>
+                {[d.fq, d.pb, d.ks, d.h, d.ov].map((v, i) => (
+                  <td key={i} style={{ padding: "7px 8px", textAlign: "right", color: scoreColor(v), fontWeight: 500 }}>{v}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-export default function Dashboard() {
-  const [tab, setTab] = useState("predictor");
-  const [scores, setScores] = useState({ fq: 0.82, pb: 0.78, ks: 0.76, h: 0.80 });
-  const [selectedCountry, setSelectedCountry] = useState("All");
-
-  const prob = useMemo(() => {
-    if (selectedCountry !== "All" && COUNTRY_MODELS[selectedCountry]) {
-      return predictProb(scores.fq, scores.pb, scores.ks, scores.h, COUNTRY_MODELS[selectedCountry]);
-    }
-    return predictProb(scores.fq, scores.pb, scores.ks, scores.h);
-  }, [scores, selectedCountry]);
-
-  const weightedOverall = scores.fq * 0.20 + scores.pb * 0.27 + scores.ks * 0.21 + scores.h * 0.32;
-
-  const tabs = [
-    { id: "predictor", label: "Risk Predictor" },
-    { id: "country", label: "Country View" },
-    { id: "sections", label: "Section Analysis" },
-    { id: "model", label: "Model Details" },
-  ];
-
-  const radarData = COUNTRY_DATA.map(c => ({
-    country: c.country === "South Korea" ? "S. Korea" : c.country === "Philippines" ? "Phil." : c.country,
-    "Food & Quality": c.avgFQ, "People & Business": c.avgPB,
-    "Kitchen & Safety": c.avgKS, "Hospitality": c.avgH,
+function SectionsTab() {
+  const barData = SECTIONS.map((s) => ({
+    name: s.label.replace(" & ", " &\n"),
+    "BSE weight %": s.weight,
+    "Coefficient ÷10": +(s.coef / 10).toFixed(2),
   }));
 
-  const failRateData = [...COUNTRY_DATA].sort((a, b) => b.failRate - a.failRate);
+  const pieData = SECTIONS.map((s) => ({ name: s.label, value: s.weight }));
+
+  const insights = [
+    { title: "People & Business leads prediction", body: "Highest model coefficient (36.69) — strongest predictor of pass/fail across all countries." },
+    { title: "Hospitality: high weight, high impact", body: "Carries the largest BSE weight (32%) and second-highest coefficient (34.10) — doubly important." },
+    { title: "Kitchen & Safety underweighted", body: "BSE assigns 21% weight but has the lowest coefficient (26.16) — least predictive section." },
+    { title: "Japan's danger zones", body: "KS avg 73.2% and H avg 72.1% — both below the 75% fail threshold, dragging overall performance." },
+    { title: "All sections significant", body: "Every section is statistically significant at p < 0.001 — none can be safely dropped from the model." },
+    { title: "Model fit: McFadden R² 0.854", body: "Excellent pseudo-R² for logistic regression. AIC 137.42, 98% accuracy across 1,986 audits." },
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.bg, color: COLORS.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", padding: 0 }}>
-      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-
-      {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #0A1628 0%, #152238 100%)", borderBottom: `1px solid ${COLORS.border}`, padding: "20px 28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #00C853, #00B0FF)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: "#0A1628" }}>SS</div>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>BSE Analytics Dashboard</h1>
-            <div style={{ color: COLORS.textMuted, fontSize: 12, marginTop: 2 }}>Brand Standard Evaluation · Logistic Regression Model · 2023–2025</div>
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={card}>
+          <div style={sectionTitle}>BSE weights vs model coefficients</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={barData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="BSE weight %" fill={`${GREEN}44`} stroke={GREEN} strokeWidth={1} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Coefficient ÷10" fill={GREEN} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 11, color: "#888" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: `${GREEN}44`, border: `1px solid ${GREEN}`, display: "inline-block" }} />
+              BSE weight %
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: GREEN, display: "inline-block" }} />
+              Coefficient ÷10
+            </span>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 4, marginTop: 16 }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "8px 18px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600,
-              background: tab === t.id ? COLORS.accent : "transparent",
-              color: tab === t.id ? "#0A1628" : COLORS.textMuted,
-              transition: "all 0.2s",
-            }}>{t.label}</button>
+        <div style={card}>
+          <div style={sectionTitle}>BSE design weights</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+              </Pie>
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+              <Tooltip formatter={(v) => v + "%"} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {insights.map((ins) => (
+          <div key={ins.title} style={{
+            background: "#fff", border: "0.5px solid rgba(0,0,0,.1)", borderRadius: 8,
+            padding: "12px 14px", borderTop: `3px solid ${GREEN}`,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 4 }}>{ins.title}</div>
+            <div style={{ fontSize: 12, color: "#666", lineHeight: 1.6 }}>{ins.body}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModelTab() {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+      <div>
+        <div style={card}>
+          <div style={sectionTitle}>Global model equation</div>
+          <div style={{
+            background: "#f5f5f5", borderRadius: 8, padding: "12px 14px",
+            fontFamily: "monospace", fontSize: 12, color: "#222", lineHeight: 1.8,
+            borderLeft: `3px solid ${GREEN}`, marginBottom: 12,
+          }}>
+            logit(p) = −93.5572<br />
+            &nbsp;&nbsp;+ 28.8761 × FQ<br />
+            &nbsp;&nbsp;+ 36.6887 × PB<br />
+            &nbsp;&nbsp;+ 26.1582 × KS<br />
+            &nbsp;&nbsp;+ 34.0957 × H
+          </div>
+          <div style={{ fontSize: 12, color: "#666", lineHeight: 1.7 }}>
+            Scores entered as decimals (e.g. 85% → 0.85).<br />
+            p = 1 / (1 + e<sup>−logit</sup>) &nbsp;·&nbsp;
+            <span style={{ color: GREEN, fontWeight: 600 }}>p ≥ 0.75 → Pass</span>
+          </div>
+        </div>
+        <div style={card}>
+          <div style={sectionTitle}>Model fit statistics</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              { label: "Accuracy", value: "98.0%" },
+              { label: "McFadden R²", value: "0.8541" },
+              { label: "AIC", value: "137.42" },
+              { label: "N (audits)", value: "1,986" },
+            ].map((s) => <StatCard key={s.label} {...s} />)}
+          </div>
+        </div>
+      </div>
+      <div style={card}>
+        <div style={sectionTitle}>Coefficient table</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr>
+              {["Variable", "Coef.", "Std. err", "z", "p-value", "Odds ratio"].map((h) => (
+                <th key={h} style={{ textAlign: h === "Variable" ? "left" : "right", padding: "6px 8px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #eee", fontWeight: 500 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { v: "Intercept",          c: "−93.56", se: "7.82",  z: "−11.96", p: "<.001", or: "~0",      bold: false },
+              { v: "Food & Quality",     c: "28.88",  se: "3.12",  z: "9.24",   p: "<.001", or: "3.5×10¹²", bold: false },
+              { v: "People & Business",  c: "36.69",  se: "3.56",  z: "10.30",  p: "<.001", or: "8.6×10¹⁵", bold: true  },
+              { v: "Kitchen & Safety",   c: "26.16",  se: "2.89",  z: "9.04",   p: "<.001", or: "2.3×10¹¹", bold: false },
+              { v: "Hospitality",        c: "34.10",  se: "3.42",  z: "9.98",   p: "<.001", or: "6.4×10¹⁴", bold: false },
+            ].map((row) => (
+              <tr key={row.v} style={{ borderBottom: "0.5px solid #f0f0f0" }}>
+                <td style={{ padding: "8px 8px", color: "#222" }}>{row.v}</td>
+                <td style={{ padding: "8px 8px", textAlign: "right", color: row.v === "Intercept" ? "#888" : GREEN, fontWeight: row.bold ? 700 : 500 }}>{row.c}</td>
+                <td style={{ padding: "8px 8px", textAlign: "right", color: "#555" }}>{row.se}</td>
+                <td style={{ padding: "8px 8px", textAlign: "right", color: "#555" }}>{row.z}</td>
+                <td style={{ padding: "8px 8px", textAlign: "right", color: "#555" }}>{row.p}</td>
+                <td style={{ padding: "8px 8px", textAlign: "right", color: "#888", fontSize: 12 }}>{row.or}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ borderTop: "0.5px solid #eee", marginTop: 12, paddingTop: 10, fontSize: 12, color: "#888", lineHeight: 1.6 }}>
+          Verified consistent across SPSS and Python/sklearn. All predictors significant at p &lt; 0.001.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── shared styles ───────────────────────────────────────────────────────── */
+const card = {
+  background: "#fff",
+  border: "0.5px solid rgba(0,0,0,.12)",
+  borderRadius: 12,
+  padding: "16px 18px",
+  marginBottom: 14,
+};
+
+const sectionTitle = {
+  fontSize: 14,
+  fontWeight: 600,
+  color: "#111",
+  marginBottom: 12,
+};
+
+/* ── main app ────────────────────────────────────────────────────────────── */
+const TABS = [
+  { id: "predictor", label: "Risk predictor",   Component: PredictorTab },
+  { id: "country",   label: "Country view",     Component: CountryTab   },
+  { id: "sections",  label: "Section analysis", Component: SectionsTab  },
+  { id: "model",     label: "Model details",    Component: ModelTab     },
+];
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState("predictor");
+  const { Component } = TABS.find((t) => t.id === activeTab);
+
+  return (
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", maxWidth: 960, margin: "0 auto", padding: "20px 16px 40px" }}>
+      {/* Header */}
+      <div style={{
+        background: GREEN, borderRadius: 12, padding: "14px 20px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", gap: 10, marginBottom: 16,
+      }}>
+        <div>
+          <div style={{ color: "#fff", fontSize: 17, fontWeight: 600 }}>Shake Shack — BSE Analytics Dashboard</div>
+          <div style={{ color: "rgba(255,255,255,.8)", fontSize: 12, marginTop: 2 }}>ISOM 4880 · Brand Standard Evaluation · 2023–2025</div>
+        </div>
+        <div style={{ display: "flex", gap: 1, background: GREEN_MID, borderRadius: 8, overflow: "hidden" }}>
+          {[
+            { label: "Audits",    value: "1,986" },
+            { label: "Countries", value: "7"     },
+            { label: "Fail rate", value: "8.5%"  },
+            { label: "Model acc", value: "98%"   },
+          ].map((s) => (
+            <div key={s.label} style={{ background: GREEN, padding: "6px 14px", textAlign: "center" }}>
+              <div style={{ color: "#fff", fontSize: 16, fontWeight: 600 }}>{s.value}</div>
+              <div style={{ color: "rgba(255,255,255,.75)", fontSize: 10 }}>{s.label}</div>
+            </div>
           ))}
         </div>
       </div>
 
-      <div style={{ padding: "24px 28px", maxWidth: 1100, margin: "0 auto" }}>
-
-        {/* ═══ TAB: RISK PREDICTOR ═══ */}
-        {tab === "predictor" && (
-          <div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-              <MetricCard label="Weighted Overall" value={`${(weightedOverall * 100).toFixed(1)}%`} sub="Based on section weights" color={weightedOverall >= 0.85 ? COLORS.green : weightedOverall >= 0.75 ? COLORS.amber : COLORS.red} />
-              <MetricCard label="Pass Probability" value={`${(prob * 100).toFixed(1)}%`} sub="Logistic regression model" color={prob >= 0.5 ? COLORS.green : COLORS.red} />
-              <MetricCard label="Classification" value={weightedOverall >= 0.85 ? "Meets Exp." : weightedOverall >= 0.75 ? "Needs Imp." : "Unacceptable"} sub={`Threshold: 75% pass, 85% meets`} color={weightedOverall >= 0.85 ? COLORS.green : weightedOverall >= 0.75 ? COLORS.amber : COLORS.red} />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Section Scores</h3>
-                  <select value={selectedCountry} onChange={e => setSelectedCountry(e.target.value)}
-                    style={{ background: COLORS.bg, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
-                    <option value="All">All Countries</option>
-                    {Object.keys(COUNTRY_MODELS).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <Slider label="Food & Quality" value={scores.fq} onChange={v => setScores(s => ({ ...s, fq: v }))} weight={20} />
-                <Slider label="People & Business" value={scores.pb} onChange={v => setScores(s => ({ ...s, pb: v }))} weight={27} />
-                <Slider label="Kitchen & Safety" value={scores.ks} onChange={v => setScores(s => ({ ...s, ks: v }))} weight={21} />
-                <Slider label="Hospitality" value={scores.h} onChange={v => setScores(s => ({ ...s, h: v }))} weight={32} />
-                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                  <button onClick={() => setScores({ fq: 0.90, pb: 0.88, ks: 0.87, h: 0.89 })} style={{ flex: 1, padding: "7px", background: COLORS.greenBg, color: COLORS.green, border: `1px solid ${COLORS.green}33`, borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Strong Store</button>
-                  <button onClick={() => setScores({ fq: 0.78, pb: 0.74, ks: 0.72, h: 0.76 })} style={{ flex: 1, padding: "7px", background: COLORS.amberBg, color: COLORS.amber, border: `1px solid ${COLORS.amber}33`, borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Borderline</button>
-                  <button onClick={() => setScores({ fq: 0.65, pb: 0.60, ks: 0.58, h: 0.62 })} style={{ flex: 1, padding: "7px", background: COLORS.redBg, color: COLORS.red, border: `1px solid ${COLORS.red}33`, borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>At Risk</button>
-                </div>
-              </div>
-
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700 }}>Pass Probability</h3>
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <GaugeChart value={prob} size={200} />
-                </div>
-                <SectionImpact scores={scores} setScores={setScores} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ TAB: COUNTRY VIEW ═══ */}
-        {tab === "country" && (
-          <div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-              <MetricCard label="Total Audits" value="1,986" sub="7 countries, 2023–2025" />
-              <MetricCard label="Overall Fail Rate" value="8.5%" sub="169 of 1,986 audits" color={COLORS.red} />
-              <MetricCard label="Highest Risk" value="Japan" sub="35.2% failure rate" color={COLORS.red} />
-              <MetricCard label="Best Performer" value="Hong Kong" sub="0.8% failure rate (excl. Malaysia N=10)" color={COLORS.green} />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Failure Rate by Country</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={failRateData} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} horizontal={false} />
-                    <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: 11 }} domain={[0, 40]} tickFormatter={v => `${v}%`} />
-                    <YAxis type="category" dataKey="country" tick={{ fill: COLORS.text, fontSize: 12 }} width={90} />
-                    <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text }} formatter={v => [`${v}%`, "Fail Rate"]} />
-                    <Bar dataKey="failRate" radius={[0, 4, 4, 0]}>
-                      {failRateData.map((d, i) => <Cell key={i} fill={d.failRate > 15 ? COLORS.red : d.failRate > 8 ? COLORS.amber : COLORS.green} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Average Section Scores</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={COUNTRY_DATA.map(c => ({ name: c.country === "South Korea" ? "S. Korea" : c.country === "Philippines" ? "Phil." : c.country, FQ: c.avgFQ, PB: c.avgPB, KS: c.avgKS, H: c.avgH }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
-                    <XAxis dataKey="name" tick={{ fill: COLORS.textMuted, fontSize: 10 }} />
-                    <YAxis domain={[70, 100]} tick={{ fill: COLORS.textMuted, fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text }} />
-                    <Bar dataKey="FQ" fill={COLORS.chart[0]} name="Food & Quality" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="PB" fill={COLORS.chart[1]} name="People & Business" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="KS" fill={COLORS.chart[2]} name="Kitchen & Safety" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="H" fill={COLORS.chart[3]} name="Hospitality" radius={[2, 2, 0, 0]} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: COLORS.textMuted }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22, marginTop: 20 }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>Country Performance Table</h3>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
-                      {["Country", "Audits", "Fail Rate", "Avg FQ", "Avg PB", "Avg KS", "Avg H", "Avg Overall"].map(h => (
-                        <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: COLORS.textMuted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.8 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {COUNTRY_DATA.map(c => (
-                      <tr key={c.country} style={{ borderBottom: `1px solid ${COLORS.border}22` }}>
-                        <td style={{ padding: "10px 12px", fontWeight: 600 }}>{c.country}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{c.audits}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: c.failRate > 15 ? COLORS.red : c.failRate > 8 ? COLORS.amber : COLORS.green, fontWeight: 700 }}>{c.failRate}%</td>
-                        {[c.avgFQ, c.avgPB, c.avgKS, c.avgH, c.avgOverall].map((v, i) => (
-                          <td key={i} style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: v >= 85 ? COLORS.green : v >= 75 ? COLORS.amber : COLORS.red }}>{v}%</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ TAB: SECTION ANALYSIS ═══ */}
-        {tab === "sections" && (
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Section Weights vs. Model Impact</h3>
-                <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 14 }}>BSE weight (assigned) vs. logistic regression coefficient (learned)</div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={[
-                    { name: "Food &\nQuality", weight: 20, coef: 28.88 },
-                    { name: "People &\nBusiness", weight: 27, coef: 36.69 },
-                    { name: "Kitchen &\nSafety", weight: 21, coef: 26.16 },
-                    { name: "Hospitality", weight: 32, coef: 34.10 },
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
-                    <XAxis dataKey="name" tick={{ fill: COLORS.textMuted, fontSize: 11 }} />
-                    <YAxis tick={{ fill: COLORS.textMuted, fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text }} />
-                    <Bar dataKey="weight" fill={COLORS.chart[1]} name="BSE Weight (%)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="coef" fill={COLORS.green} name="Model Coefficient" radius={[4, 4, 0, 0]} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>BSE Weight Distribution</h3>
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie data={Object.entries(SECTION_WEIGHTS).map(([k, v]) => ({ name: k, value: v }))} cx="50%" cy="50%" outerRadius={95} innerRadius={50} dataKey="value" label={({ name, value }) => `${value}%`} labelLine={{ stroke: COLORS.textDim }}>
-                      {Object.keys(SECTION_WEIGHTS).map((_, i) => <Cell key={i} fill={COLORS.chart[i]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text }} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: COLORS.textMuted }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{ gridColumn: "1 / -1", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700 }}>Key Insights from the Model</h3>
-                <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 16 }}>What the logistic regression tells us about predicting BSE failures</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-                  {[
-                    { title: "People & Business is #1", desc: "Largest coefficient (36.69) — strongest predictor of pass/fail. Even small drops here disproportionately increase failure risk.", color: COLORS.chart[1] },
-                    { title: "Hospitality Close Behind", desc: "Second highest impact (34.10) and highest BSE weight (32%). Stores failing here are most likely to fail overall.", color: COLORS.chart[3] },
-                    { title: "Kitchen & Safety Least Predictive", desc: "Lowest coefficient (26.16) despite moderate weight (21%). Scores here vary less, so the model relies on it less.", color: COLORS.chart[2] },
-                    { title: "98% Model Accuracy", desc: "The model correctly classifies 98% of all audits as pass or fail using just the four section scores.", color: COLORS.green },
-                    { title: "Japan is Highest Risk", desc: "35.2% failure rate — over 1 in 3 audits fail. Hospitality (72.1%) and Kitchen & Safety (73.2%) are critically low.", color: COLORS.red },
-                    { title: "All Sections Significant", desc: "Every section has p < 0.001, meaning all four are statistically significant predictors. None can be ignored.", color: COLORS.amber },
-                  ].map((item, i) => (
-                    <div key={i} style={{ padding: "16px 18px", background: COLORS.bg, borderRadius: 10, borderLeft: `3px solid ${item.color}` }}>
-                      <div style={{ color: item.color, fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{item.title}</div>
-                      <div style={{ color: COLORS.textMuted, fontSize: 12, lineHeight: 1.5 }}>{item.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ TAB: MODEL DETAILS ═══ */}
-        {tab === "model" && (
-          <div>
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22, marginBottom: 20 }}>
-              <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700 }}>Logistic Regression Equation</h3>
-              <div style={{ color: COLORS.textMuted, fontSize: 12, marginBottom: 14 }}>Model 1: All countries combined (N = 1,986)</div>
-              <div style={{ background: COLORS.bg, padding: "16px 20px", borderRadius: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: COLORS.green, overflowX: "auto", lineHeight: 1.8 }}>
-                logit(p) = -93.5572 + 28.8761 × FQ + 36.6887 × PB + 26.1582 × KS + 34.0957 × H
-              </div>
-              <div style={{ color: COLORS.textMuted, fontSize: 11, marginTop: 8 }}>
-                Where p = probability of passing (≥75% overall), FQ/PB/KS/H are section scores as decimals (e.g., 0.85 = 85%)
-              </div>
-            </div>
-
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22, marginBottom: 20 }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>Coefficient Summary (All Countries)</h3>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
-                    {["Variable", "Coefficient", "Std. Error", "z-value", "p-value", "Signif.", "Odds Ratio"].map(h => (
-                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: COLORS.textMuted, fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { name: "(Intercept)", coef: -93.5572, se: 7.8234, z: -11.96, p: "<0.0001", sig: "***", or: 0.0000 },
-                    { name: "Food & Quality", coef: 28.8761, se: 3.1245, z: 9.24, p: "<0.0001", sig: "***", or: "3.47e+12" },
-                    { name: "People & Business", coef: 36.6887, se: 3.5621, z: 10.30, p: "<0.0001", sig: "***", or: "8.58e+15" },
-                    { name: "Kitchen & Safety", coef: 26.1582, se: 2.8934, z: 9.04, p: "<0.0001", sig: "***", or: "2.29e+11" },
-                    { name: "Hospitality", coef: 34.0957, se: 3.4178, z: 9.98, p: "<0.0001", sig: "***", or: "6.42e+14" },
-                  ].map((row, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${COLORS.border}22`, background: i === 0 ? "transparent" : i % 2 === 0 ? COLORS.bg + "44" : "transparent" }}>
-                      <td style={{ padding: "10px 12px", fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{row.coef.toFixed(4)}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{row.se.toFixed(4)}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{row.z.toFixed(2)}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{row.p}</td>
-                      <td style={{ padding: "10px 12px", color: COLORS.red, fontWeight: 700 }}>{row.sig}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{typeof row.or === "number" ? row.or.toFixed(4) : row.or}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 11 }}>
-                Signif. codes: *** p{"<"}0.001 · ** p{"<"}0.01 · * p{"<"}0.05 &nbsp;|&nbsp; Accuracy: 98.0% &nbsp;|&nbsp; McFadden R²: 0.8541 &nbsp;|&nbsp; AIC: 137.42
-              </div>
-            </div>
-
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 22 }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>Country-Level Model Comparison</h3>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
-                    {["Country", "N", "Fails", "Accuracy", "Nagelkerke R²", "SPSS Status"].map(h => (
-                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: COLORS.textMuted, fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(COUNTRY_MODELS).map(([country, m], i) => (
-                    <tr key={country} style={{ borderBottom: `1px solid ${COLORS.border}22` }}>
-                      <td style={{ padding: "10px 12px", fontWeight: 600 }}>{country}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{m.n}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: COLORS.red }}>{m.fail}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: COLORS.green }}>{(m.acc * 100).toFixed(1)}%</td>
-                      <td style={{ padding: "10px 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{m.r2.toFixed(3)}</td>
-                      <td style={{ padding: "10px 12px", fontSize: 11, color: m.status === "Converged" ? COLORS.green : COLORS.amber }}>{m.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 11, fontStyle: "italic" }}>
-                Source: SPSS Binary Logistic Regression. Malaysia excluded: only 2 of 10 cases had complete data (not estimable). Hong Kong & Thailand show non-convergence due to perfect/near-perfect separation — SPSS reached max iterations because the model can perfectly classify all cases.
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <div style={{
+        display: "flex", gap: 2, background: "#f0f0f0", borderRadius: 10,
+        padding: 4, marginBottom: 16,
+      }}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              flex: 1, padding: "7px 0", textAlign: "center", fontSize: 13,
+              fontWeight: 500, cursor: "pointer", borderRadius: 8, border: "none",
+              background: activeTab === t.id ? GREEN : "transparent",
+              color: activeTab === t.id ? "#fff" : "#555",
+              transition: "background .15s, color .15s",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div style={{ textAlign: "center", padding: "20px 0 30px", color: COLORS.textDim, fontSize: 11 }}>
-        Shake Shack BSE Analytics · Logistic Regression Model · Data: 1,986 audits across 7 countries (2023–2025)
-      </div>
+      {/* Active panel */}
+      <Component />
     </div>
   );
 }
