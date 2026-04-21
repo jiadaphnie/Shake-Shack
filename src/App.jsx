@@ -266,14 +266,16 @@ function PredictorTab() {
 
   const pct = Math.round(p * 100)
   const pass = p >= PASS_THRESHOLD
-  const wtd = Math.round(scores.fq * 0.2 + scores.pb * 0.27 + scores.ks * 0.21 + scores.h * 0.32)
+  const wtd = Math.round(SECTIONS.reduce((acc, s) => acc + scores[s.key] * (s.weight / 100), 0))
 
   const impacts = useMemo(
     () =>
       SECTIONS.map((s) => {
-        const bumped = { ...scores, [s.key]: Math.min(scores[s.key] + 5, 100) }
-        const gain = calcProb(bumped.fq, bumped.pb, bumped.ks, bumped.h).p - p
-        return { ...s, gain, val: scores[s.key] }
+        const bumped5 = { ...scores, [s.key]: Math.min(scores[s.key] + 5, 100) }
+        const gain5 = calcProb(bumped5.fq, bumped5.pb, bumped5.ks, bumped5.h).p - p
+        const bumpedMax = { ...scores, [s.key]: 100 }
+        const gainMax = calcProb(bumpedMax.fq, bumpedMax.pb, bumpedMax.ks, bumpedMax.h).p - p
+        return { ...s, gain: gainMax, gain5, val: scores[s.key] }
       }).sort((a, b) => b.gain - a.gain),
     [scores, p]
   )
@@ -356,7 +358,7 @@ function PredictorTab() {
         </Card>
 
         <Card>
-          <CardTitle>Which section to improve first? (+5pt impact)</CardTitle>
+          <CardTitle>Which section to improve first? (max potential impact)</CardTitle>
           <div
             style={{
               display: 'grid',
@@ -391,7 +393,7 @@ function PredictorTab() {
                 <div style={{ fontSize: 18, fontWeight: 700, color: scoreColor(im.val), margin: '2px 0' }}>
                   {im.val}%
                 </div>
-                <div style={{ fontSize: 11, color: '#888' }}>+5pt → +{(im.gain * 100).toFixed(1)}pp</div>
+                <div style={{ fontSize: 11, color: '#888' }}>+5pt → +{(im.gain5 * 100).toFixed(1)}pp</div>
               </div>
             ))}
           </div>
