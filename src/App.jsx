@@ -264,7 +264,7 @@ function PredictorTab() {
 
   const { lo, p } = useMemo(() => calcProb(scores.fq, scores.pb, scores.ks, scores.h), [scores])
 
-  const pct = Math.round(p * 100)
+  const pct = Math.min(99, Math.round(p * 100))
   const pass = p >= PASS_THRESHOLD
   const wtd = Math.round(SECTIONS.reduce((acc, s) => acc + scores[s.key] * (s.weight / 100), 0))
 
@@ -826,7 +826,7 @@ function ModelTab() {
   const { lo, p } = useMemo(() => calcProb(inputs.fq, inputs.pb, inputs.ks, inputs.h), [inputs])
 
   const expLo = Math.exp(lo)
-  const pct = (p * 100).toFixed(1)
+  const pct = Math.min(99.9, p * 100).toFixed(1)
   const pass = p >= PASS_THRESHOLD
   const coefChartData = SECTIONS.map((s) => ({ name: s.short, Coefficient: s.coef }))
 
