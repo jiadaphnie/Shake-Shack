@@ -53,6 +53,9 @@ const COUNTRIES = [
   { c: 'Malaysia', n: 10, f: 0, fr: 0.0, fq: 93.6, pb: 92.8, ks: 77.9, h: 80.6, ov: 87.3 },
 ]
 
+// Paste your Google Sheets "Publish to web → CSV" URL here
+const SHEET_CSV_URL = ''
+
 const COUNTRY_COLORS = [G, G_DARK, '#78c050', '#a0d080', '#1c5c08', '#c5e8a0', '#2a7a12']
 const PIE_COLORS = [G, G_DARK, '#78c050', '#a0d080']
 
@@ -527,14 +530,65 @@ function PredictorTab() {
   )
 }
 
+function parseCountryCsv(text) {
+  const lines = text.trim().replace(/\r/g, '').split('\n').filter(Boolean)
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
+  const pick = (vals, ...keys) => {
+    for (const k of keys) {
+      const i = headers.indexOf(k)
+      if (i !== -1) return vals[i]?.trim() ?? ''
+    }
+    return ''
+  }
+  return lines.slice(1).map((line) => {
+    const vals = line.split(',')
+    return {
+      c: pick(vals, 'country'),
+      n: Number(pick(vals, 'audits', 'n')) || 0,
+      f: Number(pick(vals, 'failures', 'f')) || 0,
+      fr: Number(pick(vals, 'failure_rate', 'fail_rate', 'fr')) || 0,
+      fq: Number(pick(vals, 'fq')) || 0,
+      pb: Number(pick(vals, 'pb')) || 0,
+      ks: Number(pick(vals, 'ks')) || 0,
+      h: Number(pick(vals, 'h')) || 0,
+      ov: Number(pick(vals, 'overall', 'ov')) || 0,
+    }
+  }).filter((d) => d.c)
+}
+
 function CountryTab() {
   const [hover, setHover] = useState(null)
+  const [countries, setCountries] = useState(COUNTRIES)
+  const [sheetError, setSheetError] = useState(null)
   const mobile = useIsMobile()
-  const sorted = [...COUNTRIES].sort((a, b) => b.fr - a.fr)
+
+  useEffect(() => {
+    if (!SHEET_CSV_URL) return
+    async function load() {
+      try {
+        const res = await fetch(SHEET_CSV_URL)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const text = await res.text()
+        const parsed = parseCountryCsv(text)
+        if (parsed.length > 0) {
+          setCountries(parsed)
+          setSheetError(null)
+        }
+      } catch {
+        setSheetError('Could not load Google Sheet — showing last known data.')
+      }
+    }
+    load()
+    const interval = setInterval(load, 2 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const sorted = [...countries].sort((a, b) => b.fr - a.fr)
 
   const radarData = SECTIONS.map((s) => {
     const row = { section: s.short }
-    COUNTRIES.forEach((d) => {
+    countries.forEach((d) => {
       row[d.c] = d[s.key]
     })
     return row
@@ -542,6 +596,11 @@ function CountryTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {sheetError && (
+        <div style={{ fontSize: 12, color: AMBER, background: '#fffbf0', border: `1px solid ${AMBER}`, borderRadius: 6, padding: '6px 12px' }}>
+          {sheetError}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
         <Card>
           <CardTitle>Failure rate by country</CardTitle>
@@ -569,13 +628,13 @@ function CountryTab() {
                 <PolarGrid stroke="#eee" />
                 <PolarAngleAxis dataKey="section" tick={{ fontSize: 11, fill: '#666' }} />
                 <PolarRadiusAxis angle={90} domain={[65, 100]} tick={{ fontSize: 8, fill: '#aaa' }} />
-                {COUNTRIES.map((d, i) => (
+                {countries.map((d, i) => (
                   <Radar
                     key={d.c}
                     name={d.c}
                     dataKey={d.c}
-                    stroke={COUNTRY_COLORS[i]}
-                    fill={COUNTRY_COLORS[i]}
+                    stroke={COUNTRY_COLORS[i % COUNTRY_COLORS.length]}
+                    fill={COUNTRY_COLORS[i % COUNTRY_COLORS.length]}
                     fillOpacity={0.07}
                     dot={false}
                   />
@@ -597,8 +656,8 @@ function CountryTab() {
               <YAxis domain={[60, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10, fill: '#666' }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              {COUNTRIES.map((d, i) => (
-                <Bar key={d.c} dataKey={d.c} fill={COUNTRY_COLORS[i]} radius={[2, 2, 0, 0]} />
+              {countries.map((d, i) => (
+                <Bar key={d.c} dataKey={d.c} fill={COUNTRY_COLORS[i % COUNTRY_COLORS.length]} radius={[2, 2, 0, 0]} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -630,7 +689,7 @@ function CountryTab() {
               </tr>
             </thead>
             <tbody>
-              {COUNTRIES.map((d) => (
+              {countries.map((d) => (
                 <tr
                   key={d.c}
                   onMouseEnter={() => setHover(d.c)}
