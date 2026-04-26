@@ -471,8 +471,7 @@ function PredictorTab() {
               textAlign: 'left',
             }}
           >
-            <b style={{ color: '#555' }}>75%</b> = fail threshold &nbsp;·&nbsp;
-            <b style={{ color: G }}>85%</b> = meets expectations
+            <b style={{ color: '#555' }}>75%</b> = fail threshold
           </div>
         </Card>
 
