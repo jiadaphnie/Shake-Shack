@@ -430,19 +430,7 @@ function PredictorTab() {
           <div style={{ fontSize: 14, opacity: 0.9, marginTop: 8 }}>
             {pass ? 'Likely to pass BSE audit' : 'At risk of failing BSE audit'}
           </div>
-          <div
-            style={{
-              display: 'inline-block',
-              marginTop: 12,
-              padding: '5px 22px',
-              borderRadius: 20,
-              fontSize: 13,
-              fontWeight: 700,
-              background: 'rgba(255,255,255,.22)',
-            }}
-          >
-            {pass ? 'PASS' : 'FAIL'}
-          </div>
+
           <div style={{ fontSize: 11, opacity: 0.8, marginTop: 10 }}>
             Decision rule: p ≥ 0.75 → predicted pass
           </div>
