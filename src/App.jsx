@@ -77,12 +77,12 @@ const COEF_ROWS = [
 ]
 
 const INSIGHTS = [
-  { title: 'People & Business leads prediction', body: 'Highest coefficient (36.69) — strongest predictor of pass/fail across all countries.' },
+  { title: 'People & Business has the highest impact', body: 'Highest coefficient (36.69) — strongest predictor of pass/fail across all countries.' },
   { title: 'Hospitality: high weight, high impact', body: 'Largest BSE weight (32%) and second-highest coefficient (34.10) — doubly critical.' },
-  { title: 'Kitchen & Safety underweighted', body: 'BSE assigns 21% weight but lowest coefficient (26.16) — least predictive section.' },
+  { title: 'Kitchen & Safety has the lowest impact', body: 'BSE assigns 21% weight but lowest coefficient (26.16) — least predictive section.' },
   { title: "Japan's danger zones", body: 'KS avg 73.2% and H avg 72.1% — both below the 75% fail threshold.' },
+  { title: 'Human behavior drives pass probability', body: 'The strongest predictors of passing are people-driven — People & Business and Hospitality together carry the highest model coefficients, suggesting that human behavior, not just operational compliance, determines audit outcomes.' },
   { title: 'All sections significant', body: 'Every section: p < 0.001. None can be dropped without hurting accuracy.' },
-  { title: 'Model fit: McFadden R² 0.854', body: 'Well above the 0.4 threshold for a strong model. AIC 137.42, 98% accuracy.' },
 ]
 
 function useIsMobile(breakpoint = 900) {
@@ -722,11 +722,13 @@ function CountryTab() {
 function SectionsTab() {
   const mobile = useIsMobile()
 
-  const weightVsCoef = SECTIONS.map((s) => ({
-    name: s.short,
-    'BSE weight %': s.weight,
-    'Coefficient ÷10': +(s.coef / 10).toFixed(2),
-  }))
+  const weightVsCoef = [...SECTIONS]
+    .sort((a, b) => b.coef - a.coef)
+    .map((s) => ({
+      name: s.short,
+      'BSE weight %': s.weight,
+      Coefficient: +s.coef.toFixed(2),
+    }))
 
   const pieData = SECTIONS.map((s) => ({ name: s.label, value: s.weight }))
 
@@ -763,7 +765,7 @@ function SectionsTab() {
                   verticalAlign: 'middle',
                 }}
               />
-              Coefficient ÷10
+              Coefficient
             </span>
           </div>
           <ChartBox height={220}>
@@ -773,7 +775,7 @@ function SectionsTab() {
                 <YAxis tick={{ fontSize: 10, fill: '#666' }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="BSE weight %" fill={`${G}55`} stroke={G} strokeWidth={1} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="Coefficient ÷10" fill={G} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Coefficient" fill={G} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -1141,9 +1143,9 @@ export default function App() {
             marginBottom: 16,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-start',
             flexWrap: 'wrap',
-            gap: 12,
+            gap: 24,
           }}
         >
           <div style={{ textAlign: 'left' }}>
@@ -1155,11 +1157,10 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ width: '100%', maxWidth: 520, overflowX: 'auto', background: G }}>
+          <div style={{ overflowX: 'auto', background: G }}>
             <div
               style={{
                 display: 'inline-flex',
-                minWidth: 520,
                 background: G,
               }}
             >
