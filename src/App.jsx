@@ -1155,15 +1155,12 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ width: '100%', maxWidth: 520, overflowX: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: 520, overflowX: 'auto', background: G }}>
             <div
               style={{
                 display: 'inline-flex',
                 minWidth: 520,
-                gap: 1,
-                background: G_DARK,
-                borderRadius: 8,
-                overflow: 'hidden',
+                background: G,
               }}
             >
               <MetricBadge label="Audits" value="1,986" />
