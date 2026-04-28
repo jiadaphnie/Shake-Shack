@@ -876,7 +876,9 @@ function ModelTab() {
   const expLo = Math.exp(lo)
   const pct = Math.min(99.9, p * 100).toFixed(1)
   const pass = p >= PASS_THRESHOLD
-  const coefChartData = SECTIONS.map((s) => ({ name: s.short, Coefficient: s.coef }))
+  const coefChartData = [...SECTIONS]
+    .sort((a, b) => b.coef - a.coef)
+    .map((s) => ({ name: s.short, Coefficient: s.coef }))
 
   return (
     <div
@@ -1077,8 +1079,8 @@ function ModelTab() {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#666' }} width={28} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="Coefficient" radius={[0, 4, 4, 0]}>
-                  {SECTIONS.map((s, i) => (
-                    <Cell key={i} fill={i === 1 ? G_DARK : G} />
+                  {coefChartData.map((s, i) => (
+                    <Cell key={i} fill={i === 0 ? G_DARK : G} />
                   ))}
                 </Bar>
               </BarChart>
