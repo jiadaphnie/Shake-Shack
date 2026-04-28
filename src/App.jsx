@@ -255,7 +255,7 @@ function MetricBadge({ label, value }) {
   return (
     <div style={{ background: G, padding: '6px 16px', textAlign: 'center' }}>
       <div style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>{value}</div>
-      <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 10 }}>{label}</div>
+      <div style={{ color: 'rgba(255,255,255,.9)', fontSize: 12 }}>{label}</div>
     </div>
   )
 }
