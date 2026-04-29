@@ -608,9 +608,9 @@ function CountryTab() {
 
         <Card>
           <CardTitle>Section scores — radar</CardTitle>
-          <ChartBox height={230}>
+          <ChartBox height={270}>
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
+              <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 20 }}>
                 <PolarGrid stroke="#eee" />
                 <PolarAngleAxis dataKey="section" tick={{ fontSize: 11, fill: '#666' }} />
                 <PolarRadiusAxis angle={90} domain={[65, 100]} tick={{ fontSize: 8, fill: '#aaa' }} />
