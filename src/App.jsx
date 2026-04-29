@@ -274,10 +274,9 @@ function PredictorTab() {
   const impacts = useMemo(
     () =>
       SECTIONS.map((s) => {
-        const bumped5 = { ...scores, [s.key]: Math.min(scores[s.key] + 5, 100) }
-        const gain5 = calcProb(bumped5.fq, bumped5.pb, bumped5.ks, bumped5.h).p - p
-        const bumpedMax = { ...scores, [s.key]: 100 }
-        const gainMax = calcProb(bumpedMax.fq, bumpedMax.pb, bumpedMax.ks, bumpedMax.h).p - p
+        const coef = GLOBAL_MODEL.coefs[s.key]
+        const gain5 = coef * Math.min(5, 100 - scores[s.key]) / 100
+        const gainMax = coef * (100 - scores[s.key]) / 100
         return { ...s, gain: gainMax, gain5, val: scores[s.key] }
       }).sort((a, b) => b.gain - a.gain),
     [scores, p]
@@ -396,7 +395,7 @@ function PredictorTab() {
                 <div style={{ fontSize: 18, fontWeight: 700, color: scoreColor(im.val), margin: '2px 0' }}>
                   {im.val}%
                 </div>
-                <div style={{ fontSize: 11, color: '#888' }}>+5pt → +{(im.gain5 * 100).toFixed(1)}pp</div>
+                <div style={{ fontSize: 11, color: '#888' }}>+5pt → +{im.gain5.toFixed(2)} impact</div>
               </div>
             ))}
           </div>
@@ -839,9 +838,9 @@ function SectionsTab() {
             <span style={{ fontSize: 11, fontWeight: 600, color: '#2e6b12' }}>Meets (≥ 85%)</span>
           </div>
         </div>
-        <div style={{ display: 'flex', fontSize: 10, color: '#aaa', marginTop: 4, paddingLeft: '74%' }}>
-          <span style={{ marginRight: '9%' }}>75%</span>
-          <span>85%</span>
+        <div style={{ position: 'relative', fontSize: 10, color: '#aaa', marginTop: 4, height: 14 }}>
+          <span style={{ position: 'absolute', left: '75%', transform: 'translateX(-50%)' }}>75%</span>
+          <span style={{ position: 'absolute', left: '85%', transform: 'translateX(-50%)' }}>85%</span>
         </div>
       </Card>
 
@@ -1168,8 +1167,7 @@ export default function App() {
             >
               <MetricBadge label="Audits" value="1,986" />
               <MetricBadge label="Countries" value="7" />
-              <MetricBadge label="Fail rate" value="8.5%" />
-              <MetricBadge label="Accuracy" value="98%" />
+<MetricBadge label="Accuracy" value="98%" />
             </div>
           </div>
         </div>
