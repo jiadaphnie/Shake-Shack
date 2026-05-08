@@ -278,7 +278,7 @@ function PredictorTab() {
         const gain5 = coef * Math.min(5, 100 - scores[s.key]) / 100
         const gainMax = coef * (100 - scores[s.key]) / 100
         return { ...s, gain: gainMax, gain5, val: scores[s.key] }
-      }).sort((a, b) => b.gain - a.gain),
+      }).sort((a, b) => b.gain5 - a.gain5),
     [scores, p]
   )
 
